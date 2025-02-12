@@ -9,14 +9,14 @@ This repository contains the implementation of PoisonSpot: Precise Spotting of C
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/ccs-anonymous/PoisonSpot.git
+   git clone https://github.com/um-dsp/PoisonSpot/PoisonSpot.git
    ```
 
-2. **Move to the PoisonSpot directory:**
+2. **Switch to PoisonSpot directory:**
    ```bash
    cd PoisonSpot
    ```
-3. **Install the required packages:**
+3. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
