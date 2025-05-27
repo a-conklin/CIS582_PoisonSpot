@@ -75,7 +75,7 @@ Below is a list of arguments you can use with PoisonSpot and their functions:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/ccs-anonymous/PoisonSpot.git
+   git clone https://github.com/your_repo/PoisonSpot.git
    ```
 2. **Install the required packages:**
    ```bash
