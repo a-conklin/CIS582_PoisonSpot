@@ -60,7 +60,7 @@ def main() -> None:
     """Entry-point: glue everything together."""
     args = parse_args()
     cfg = load_cfg(args.config)         
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.gpu_id)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.gpu_id)
 
     if cfg.exp is None:
         cfg.exp  = f"{cfg.attack}_{cfg.dataset}_{cfg.eps}_{cfg.pr_tgt}_{cfg.pr_sus}"
