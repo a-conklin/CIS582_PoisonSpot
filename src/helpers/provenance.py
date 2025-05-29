@@ -129,7 +129,7 @@ def capture_first_level_multi_epoch_batch_sample_weight_updates(
     
     torch.save(optimizer.state_dict(), f"src/temp_folder/temp_optimizer_state_dict_{random_num}.pth")
     
-    sur_optimizer_state = torch.load(f"src/temp_folder/temp_optimizer_state_dict_{random_num}.pth")
+    sur_optimizer_state = torch.load(f"src/temp_folder/temp_optimizer_state_dict_{random_num}.pth", map_location=device)
     sur_optimizer.load_state_dict(sur_optimizer_state)
     
     os.remove(f"src/temp_folder/temp_optimizer_state_dict_{random_num}.pth")

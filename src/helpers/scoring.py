@@ -364,14 +364,15 @@ def score_poisoned_samples(
     
     plt.figure()
     plt.plot(range(len(average_original_feature_importances)), average_original_feature_importances, label='Feature Importances', alpha=0.5, color='blue')
-    plt.savefig(figure_path + f"Feature_importances.png")
+    plt.savefig(figure_path + f"/Feature_importances.png")
     outliers = np.where(average_original_feature_importances > 0.001)[0]
     print("len outliers: ", len(outliers))  
     best_rel_feature = len(outliers)
     
     relevant_features = np.argsort(average_original_feature_importances)[::-1][:best_rel_feature]
     
-    
+    if len(relevant_features) == 0:
+        return [], 0, 0, 0, 0
     predictions_with_indices_2, _, _, _, _, _ = train_prov_data_custom(
             sus_diff[:,relevant_features], clean_diff[:,relevant_features], clean_inds, sus_inds, poison_indices,random_clean_sus_idx, n_groups, seed, device, model_name=cv_model) 
     
@@ -544,7 +545,7 @@ def score_poisoned_samples(
     else:
         sus_mean = sus_max = sus_mean_max = None
 
-    custom_threshold_mean,kmeans_threshold_mean, gaussian_threshold_mean,  tpr_kmeans, fpr_kmeans, tpr_gaussian, fpr_gaussian = plot_scores(pos_mean, clean_mean, sus_mean, f"SL Mean {attack} pr {poison_ratio} percentage {percentage} constant threshold")
+    custom_threshold_mean,kmeans_threshold_mean, gaussian_threshold_mean,  tpr_kmeans, fpr_kmeans, tpr_gaussian, fpr_gaussian = plot_scores(pos_mean, clean_mean, sus_mean, f"/SL Mean {attack} pr {poison_ratio} percentage {percentage} constant threshold")
     best_config = "mean_kmeans"
     
     if attack == "narcissus_lc" or attack == "narcissus_lc_sa":
