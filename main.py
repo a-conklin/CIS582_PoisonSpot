@@ -21,6 +21,7 @@ matplotlib.use("Agg")
 import torch
 import torch.nn as nn
 import torchvision
+import logging
 
 from src import *
 import csv
@@ -62,6 +63,13 @@ def main() -> None:
     print(torch.cuda.device_count(), "GPUs available")
     args = parse_args()
     cfg = load_cfg(args.config)         
+    
+    logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    logger = logging.getLogger(__name__)
 
     if cfg.exp is None:
         cfg.exp  = f"{cfg.attack}_{cfg.dataset}_{cfg.eps}_{cfg.pr_tgt}_{cfg.pr_sus}"
@@ -71,7 +79,7 @@ def main() -> None:
     np.random.seed(cfg.global_seed)
     random.seed(cfg.global_seed)
 
-    # summary header 
+    # summary heade
     print(
         f"Attack: {cfg.attack} | Dataset: {cfg.dataset} | Model: {cfg.model} | "
         f"Target-cls: {cfg.target_class} | Poison-ratio: {cfg.pr_tgt} | "
@@ -125,8 +133,11 @@ def main() -> None:
     if cfg.random:
         cfg.exp += "_random"
         cfg.saved_models_path += "random/"
+        cfg.prov_path += "random/"
         if not os.path.exists(cfg.saved_models_path):
             os.makedirs(cfg.saved_models_path)
+        if not os.path.exists(cfg.prov_path):
+            os.makedirs(cfg.prov_path)
 
         
     if cfg.pr_sus == int(cfg.pr_sus):
@@ -340,6 +351,7 @@ def main() -> None:
         shutil.move(tmp_path, csv_path)
 
     if cfg.clean_training:
+        logger.info("Starting clean training...")
         train_loader, test_loader, poisoned_test_loader, _ = get_loaders_from_dataset(
             poisoned_train_dataset,
             test_dataset,
@@ -376,7 +388,7 @@ def main() -> None:
                 f"clean_model_{cfg.attack}_{cfg.dataset}_{cfg.eps}_{cfg.pr_tgt}_{cfg.epochs}.pkl"
             )
             model.load_state_dict(torch.load(ckpt))
-            test_ACC = evaluate_model(model, test_loader, poisoned_test_loader, criterion, device)
+            test_ASR, test_ACC = evaluate_model(model, test_loader, poisoned_test_loader, criterion, device)
             
             csv_file = init_experiment_folder(cfg)   
             update_results(
@@ -422,6 +434,7 @@ def main() -> None:
 
         
     if cfg.poisoned_training:
+        logger.info("Starting poisoned training...")
         poisoned_train_loader, test_loader, poisoned_test_loader, _ = get_loaders_from_dataset(
             poisoned_train_dataset,
             test_dataset,
@@ -466,7 +479,7 @@ def main() -> None:
                     **{
                         "Poisoned training ASR Narcissus": test_ASR[-1],
                         "Poisoned training ASR Label Consistent": test_ASR[-2],
-                        "Poisoned training ACC": test_ACC[-1],
+                        "Poisoned training ACC": test_ACC,
                     }
                 )
             elif cfg.attack in {"narcissus_lc_sa"}:
@@ -478,7 +491,7 @@ def main() -> None:
                         "Poisoned training ASR Narcissus": test_ASR[-1],
                         "Poisoned training ASR Label Consistent": test_ASR[-2],
                         "Poisoned training ASR Sleeper Agent": test_ASR[-3],
-                        "Poisoned training ACC": test_ACC[-1],
+                        "Poisoned training ACC": test_ACC,
                     }
                 )
             else:
@@ -528,7 +541,7 @@ def main() -> None:
                     **{
                         "Poisoned training ASR Narcissus": test_ASR[-1],
                         "Poisoned training ASR Label Consistent": test_ASR[-2],
-                        "Poisoned training ACC": test_ACC[-1],
+                        "Poisoned training ACC": test_ACC,
                     }
                 )
             elif cfg.attack in {"narcissus_lc_sa"}:
@@ -540,7 +553,7 @@ def main() -> None:
                         "Poisoned training ASR Narcissus": test_ASR[-1],
                         "Poisoned training ASR Label Consistent": test_ASR[-2],
                         "Poisoned training ASR Sleeper Agent": test_ASR[-3],
-                        "Poisoned training ACC": test_ACC[-1],
+                        "Poisoned training ACC": test_ACC,
                     }
                 )
             else:
@@ -555,6 +568,7 @@ def main() -> None:
                 )
         
     if cfg.batch_level:
+        logger.info("Starting batch‐level provenance capture...")
         poisoned_train_loader, test_loader, poisoned_test_loader, target_class_indices = get_loaders_from_dataset(
             poisoned_train_dataset,
             test_dataset,
@@ -692,6 +706,7 @@ def main() -> None:
 
 
     if cfg.sample_level:
+        logger.info("Starting sample‐level provenance capture...")
         poisoned_train_loader, test_loader, poisoned_test_loader, target_class_indices = get_loaders_from_dataset(
             poisoned_train_dataset,
             test_dataset,
@@ -853,6 +868,7 @@ def main() -> None:
             
 
     if cfg.score_samples:
+        logger.info("Starting scoring samples for poisoning...")
         ignore_set = set(poison_indices)
         start_time = time.time()
 
@@ -951,6 +967,7 @@ def main() -> None:
 
            
     if cfg.retrain:
+        logger.info("Starting retraining with excluded indices...")
         # load the indices to exclude
         excl_name = f"indexes_to_exclude_{cfg.attack}_{cfg.dataset}_{cfg.eps}_{cfg.pr_tgt}_{cfg.pr_sus}.pkl"
         with open(
@@ -999,7 +1016,7 @@ def main() -> None:
                     + f"retrained_model_{cfg.attack}_{cfg.dataset}_{cfg.eps}_{cfg.pr_tgt}_{cfg.pr_sus}_{cfg.epochs}.pkl"
                 )
             )
-            test_ACC, test_ASR = evaluate_model(model, test_loader, poisoned_test_loader, criterion, device)
+            test_ASR, test_ACC = evaluate_model(model, test_loader, poisoned_test_loader, criterion, device)
             
             if cfg.attack in {"narcissus_lc"}:
                 csv_file = init_experiment_folder(cfg)   
