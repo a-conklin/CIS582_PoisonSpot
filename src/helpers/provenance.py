@@ -237,7 +237,7 @@ def capture_first_level_multi_epoch_batch_sample_weight_updates(
                     
                 else:
                     clean_indices = list(random.sample(range(len(target_images)), len(pos_indices)))
-                    clean_indices_2 = list(random.sample(set(range(len(target_images))) - set(clean_indices), len(pos_indices)))
+                    clean_indices_2 = list(random.sample(list(set(range(len(target_images))) - set(clean_indices)), len(pos_indices)))
                     remaining_indices =  list(set(range(len(indices))) - set(pos_indices))
                     assert set(indices[remaining_indices].cpu().numpy()) | set(indices[pos_indices].cpu().numpy()) == set(indices.cpu().numpy()) and set(indices[remaining_indices].cpu().numpy()) & set(indices[pos_indices].cpu().numpy()) == set()
                 
@@ -706,7 +706,7 @@ def capture_sample_level_weight_updates_idv(
                     
                 else:
                     clean_indices = list(random.sample(range(len(target_images)), len(pos_indices)))
-                    clean_indices_2 = list(random.sample(set(range(len(target_images))) - set(clean_indices), len(pos_indices)))
+                    clean_indices_2 = list(random.sample(list(set(range(len(target_images))) - set(clean_indices)), len(pos_indices)))
                     
                     assert set(clean_indices) & set(clean_indices_2) == set()
                     assert len(clean_indices) == len(clean_indices_2) == len(pos_indices)
