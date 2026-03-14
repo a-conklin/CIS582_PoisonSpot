@@ -92,6 +92,15 @@ def main() -> None:
     # models
     if cfg.model == "ResNet18":
         orig_model = ResNet(18)
+        if cfg.dataset in {"MNIST"}:
+            orig_model.conv1 = nn.Conv2d(
+                1,  # input channels
+                64,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False
+            )
     elif cfg.model == "CustomCNN":
         orig_model = CustomCNN()
     elif cfg.model == "BasicResNet":
@@ -245,7 +254,17 @@ def main() -> None:
                 )
         else:
             raise ValueError(f"Attack {cfg.attack} not supported on SLT10")
-
+    elif cfg.dataset == "MNIST":
+        if cfg.attack == "narcissus":
+            poisoned_train_dataset, test_dataset, poisoned_test_dataset, poison_indices = \
+                get_narcissus_mnist_poisoned_data(
+                    cfg.pr_tgt,
+                    cfg.target_class,
+                    cfg.dataset_dir,
+                    copy.deepcopy(orig_model),
+                    cfg.eps,
+                    cfg.global_seed,
+                )
     elif cfg.dataset == "imagenet":
         if cfg.attack == "ht":
             poisoned_train_dataset, test_dataset, poisoned_test_dataset, poison_indices = \
