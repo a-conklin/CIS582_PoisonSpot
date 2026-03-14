@@ -117,14 +117,14 @@ def get_ht_cifar10_poisoned_data(
 
     if not os.path.exists(poisoned_data_path) or not os.path.exists(poisoned_indices_path):
         # "Generate Poison Data"
-        # poison_attack = HiddenTriggerBackdoor(classifier, eps=16/255, target=target, source=source, feature_layer=19, backdoor=backdoor, decay_coeff = .95, decay_iter = 2000, max_iter=5000, batch_size=25, poison_percent=poison_ratio)
+        poison_attack = HiddenTriggerBackdoor(classifier, eps=16/255, target=target, source=source, feature_layer=19, backdoor=backdoor, decay_coeff = .95, decay_iter = 2000, max_iter=5000, batch_size=25, poison_percent=poison_ratio)
 
-        # poison_data, poison_indices = poison_attack.poison(x_train, y_train)
-        # print("Number of poison samples generated:", len(poison_data))
-        # np.save(poisoned_data_path, poison_data)
-        # np.save(poisoned_indices_path, poison_indices)
+        poison_data, poison_indices = poison_attack.poison(x_train, y_train)
+        print("Number of poison samples generated:", len(poison_data))
+        np.save(poisoned_data_path, poison_data)
+        np.save(poisoned_indices_path, poison_indices)
 
-        raise ValueError("Poisoned data files not found. Please generate the poisoned data first.")
+        # raise ValueError("Poisoned data files not found. Please generate the poisoned data first.")
     
     poison_data = np.load(poisoned_data_path)
     poison_indices = np.load(poisoned_indices_path)
