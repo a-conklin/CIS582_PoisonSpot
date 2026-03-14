@@ -29,9 +29,9 @@ import json
 import shutil
 warnings.filterwarnings("ignore")
 
-import tensorflow as tf                                        
-tf.compat.v1.disable_eager_execution()
-tf.get_logger().setLevel("ERROR")
+# import tensorflow as tf                                        
+# tf.compat.v1.disable_eager_execution()
+# tf.get_logger().setLevel("ERROR")
 
 
 def parse_args() -> argparse.Namespace:
