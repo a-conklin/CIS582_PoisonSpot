@@ -320,7 +320,8 @@ def get_narcissus_mnist_poisoned_data(
         )
         surrogate_model = model.to(device)
         generating_model = model.to(device)
-        surrogate_epochs = 200
+        # surrogate_epochs = 200
+        surrogate_epochs = 20
 
         generating_lr_warmup = 0.1
         warmup_round = 5
@@ -343,7 +344,7 @@ def get_narcissus_mnist_poisoned_data(
 
         # The argumention use for all training set
         transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(28, padding=4),
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,)),
         ])
@@ -465,13 +466,13 @@ def get_narcissus_mnist_poisoned_data(
         noise = torch.clamp(batch_pert, -l_inf_r * 2, l_inf_r * 2)
         best_noise = noise.clone().detach().cpu()
         # plt.imshow(np.transpose(noise[0].detach().cpu(), (1, 2, 0)))
-        plt.imshow(noise[0][0].cpu(), cmap="gray")
+        plt.imshow(noise[0][0].detach().cpu(), cmap="gray")
         plt.show()
         print('Noise max val:', noise.max())
 
         return best_noise
 
-    trigger_dir = f'./src/attacks/Narcissus/narcissus_trigger_{target_class}_{eps}.pkl'
+    trigger_dir = f'./src/attacks/Narcissus/narcissus_trigger_{target_class}_{eps}_28.pkl'
     if not osp.exists(trigger_dir):
         print('Generating Narcissus trigger')
         narcissus_trigger = narcissus_gen_MNIST(datasets_root_dir, target_class, eps)
