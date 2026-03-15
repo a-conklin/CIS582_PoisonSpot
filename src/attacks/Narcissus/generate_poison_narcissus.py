@@ -321,7 +321,7 @@ def get_narcissus_mnist_poisoned_data(
         surrogate_model = model.to(device)
         generating_model = model.to(device)
         # surrogate_epochs = 200
-        surrogate_epochs = 20
+        surrogate_epochs = 200
 
         generating_lr_warmup = 0.1
         warmup_round = 5
