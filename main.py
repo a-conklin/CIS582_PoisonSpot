@@ -24,6 +24,7 @@ import torchvision
 import logging
 
 from src import *
+from src.attacks.Narcissus.generate_poison_narcissus import get_narcissus_mnist_poisoned_data
 import csv
 import json
 import shutil
