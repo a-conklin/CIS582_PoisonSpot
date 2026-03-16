@@ -17,11 +17,11 @@ prov_path: ./src/Training_Prov_Data/
 exp: 
 
 # training schedule
-epochs: 50
+epochs: 20
 ep_bl: 1
-ep_bl_base: 50
+ep_bl_base: 20
 ep_sl: 10
-ep_sl_base: 50
+ep_sl_base: 20
 
 
 # batch sizes
