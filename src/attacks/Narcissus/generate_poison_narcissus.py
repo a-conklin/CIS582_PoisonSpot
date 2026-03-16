@@ -327,7 +327,7 @@ def get_narcissus_mnist_poisoned_data(
         warmup_round = 5
 
         generating_lr_tri = 0.01
-        gen_round = 1000
+        gen_round = 200
 
         train_batch_size = 128
 
