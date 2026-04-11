@@ -537,3 +537,179 @@ def get_ht_imagenet_poisoned_data(
 
 
 
+def get_ht_hagrid_poisoned_data(
+    poison_ratio,
+    target_class,
+    source_class,
+    model,
+    dataset_path='./src/data/',
+    clean_model_path="./src/saved_models/resnet18_200_clean.pth",
+    global_seed=545,
+    gpu_id=0
+):
+    """
+    Generate and return poisoned hagrid dataset with a hidden trigger backdoor.
+
+    Arguments:
+        poison_ratio (float): percentage of poisoned samples in target class.
+        target_class (int): Label to be targeted for poisoning.
+        source_class (int): backdoor trigger is applied to this class at test time to be misclassified as target_class.
+        model (torch.nn.Module): Predefined PyTorch model architecture.
+        dataset_path (str): Directory to save or load the poisoned data.
+        clean_model_path (str): File path to save or load the clean pretrained model. 
+        global_seed (int): Seed for reproducibility 
+        gpu_id (int): GPU identifier for CUDA environment variable.
+
+    Returns:
+        poisoned_train_dataset (TensorDataset): Poisoned training set with indices.
+        test_dataset (TensorDataset): Clean test set.
+        poisoned_test_dataset (TensorDataset): Test set with hidden trigger backdoor.
+        poison_indices (ndarray): Indices of samples poisoned in training set.
+    """  
+        
+
+    class HagridDataset(Dataset):
+        def __init__(self, split="train", transform=None, size=20000):
+            from datasets import load_dataset
+    
+            hagrid = load_dataset("cj-mills/hagrid-sample-120k-384p", split=split)
+            hagrid = hagrid.shuffle(seed=42).select(range(size))
+    
+            self.data = hagrid
+            self.transform = transform
+    
+        def __len__(self):
+            return len(self.data)
+    
+        def __getitem__(self, idx):
+            item = self.data[idx]
+            image = item["image"]
+            label = item["label"]
+    
+            if self.transform:
+                image = self.transform(image)
+    
+            return image, label
+
+        
+    IMAGE_SIZE = 224
+    MEAN_RGB = [0.485 , 0.456 , 0.406 ]
+    STDDEV_RGB = [0.229 , 0.224 , 0.225]
+
+    transform_train = transforms.Compose([
+        transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+        # transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=MEAN_RGB, std=STDDEV_RGB)
+    ])
+
+
+    data_dir = dataset_path + "tiny-imagenet-200/"
+    val_annotations_file = dataset_path + "tiny-imagenet-200/val/val_annotations.txt"
+    bs = 32
+    num_classes = 19
+    train_set = HagridDataset(split="train", transform=transform_train, size=20000)
+    val_set = HagridDataset(split="train", transform=transform_train, size=5000)
+
+    train_loader = DataLoader(train_set, batch_size=bs, shuffle=False)
+    val_loader = DataLoader(val_set, batch_size=bs, shuffle=False)
+
+    def collect_transformed_data(loader):
+        transformed_data = []
+        transformed_labels = []
+        for data, labels in loader:
+            transformed_data.append(data)
+            transformed_labels.append(labels)
+        return torch.cat(transformed_data), torch.cat(transformed_labels)
+
+    x_train, y_train = collect_transformed_data(train_loader)
+    x_test, y_test = collect_transformed_data(val_loader)
+    x_train, y_train, x_test, y_test = x_train.numpy(), y_train.numpy(), x_test.numpy(), y_test.numpy()
+    y_train = np.eye(19)[y_train]
+    y_test = np.eye(19)[y_test]
+    
+    from art.attacks.poisoning.backdoor_attack import PoisoningAttackBackdoor
+    target = np.zeros(19, dtype=int)
+    target[target_class] = 1
+    source = np.zeros(19, dtype=int)
+    source[source_class] = 1
+
+    patch_size = 30
+    x_shift = 224 - patch_size - 5
+    y_shift = 224 - patch_size - 5
+
+    from art.attacks.poisoning import perturbations
+    def mod(x):
+        original_dtype = x.dtype
+        x = perturbations.insert_image(x, backdoor_path="./src/attacks/HiddenTriggerBackdoor/htbd.png",
+                                    channels_first=True, random=False, x_shift=x_shift, y_shift=y_shift,
+                                    size=(patch_size,patch_size), mode='RGB', blend=1)
+        return x.astype(original_dtype)
+    backdoor = PoisoningAttackBackdoor(mod)
+
+        
+    with open(dataset_path + f'poison_indices_htbd_imgnet_vit_{poison_ratio}_{target_class}_{source_class}.npy', 'rb') as f:
+        poison_indices = np.load(f)
+    with open(dataset_path + f'poison_data_htbd_imgnet_vit_{poison_ratio}_{target_class}_{source_class}.npy', 'rb') as f:
+        poison_data = np.load(f)
+    
+    class CustomDataset(Dataset):
+        def __init__(self, images, labels, indices, transform=None):
+            """
+            Args:
+                images (numpy.ndarray): Array of images.
+                labels (numpy.ndarray): Array of labels corresponding to the images.
+                indices (numpy.ndarray): Array of indices (optional, useful for tracking original order).
+                transform (callable, optional): Optional transform to be applied on a sample.
+            """
+            self.images = images
+            self.labels = labels
+            self.indices = indices
+            self.transform = transform
+
+        def __len__(self):
+            return len(self.images)
+
+        def __getitem__(self, idx):
+            # Get the image, label, and index
+            image = self.images[idx]
+            label = self.labels[idx]
+            index = self.indices[idx]
+            
+            if self.transform:
+                image = self.transform(image)
+            
+            return image, label, index
+
+
+    print("shape of poison data", poison_data.shape, "shape of poison indices", poison_indices.shape)
+    poison_x = np.copy(x_train)
+    poison_x[poison_indices] = poison_data
+
+    poison_y = np.copy(y_train)
+    
+    
+    all_indices = np.arange(len(poison_y))
+    
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.RandomHorizontalFlip(),
+        ])
+
+    x_test_tensor = torch.tensor(x_test)
+
+    poisoned_train_dataset = CustomDataset(poison_x.transpose(0, 2, 3, 1), poison_y.argmax(axis=1), all_indices, transform=None)
+
+    trigger_test_inds = np.where(y_test.argmax(axis=1) == source.argmax())[0]
+    test_poisoned_samples, _  = backdoor.poison(x_test[trigger_test_inds], y_test[trigger_test_inds])
+    test_poisoned_samples = torch.tensor(test_poisoned_samples)
+
+    test_poisoned_labels = np.array([target_class]*len(test_poisoned_samples))
+    
+    poisoned_test_dataset = TensorDataset(test_poisoned_samples, torch.tensor(test_poisoned_labels))
+
+    test_dataset = TensorDataset(x_test_tensor, torch.tensor(y_test.argmax(axis=1)))
+
+    return poisoned_train_dataset,test_dataset, poisoned_test_dataset, poison_indices
+
+
