@@ -298,7 +298,18 @@ def main() -> None:
                 )
         else:
             raise ValueError(f"Attack {cfg.attack} not supported on ImageNet")
-
+    elif cfg.dataset == "hagrid":
+        if cfg.attack == "ht":
+            poisoned_train_dataset, test_dataset, poisoned_test_dataset, poison_indices = \
+                get_ht_hagrid_poisoned_data(
+                    cfg.pr_tgt,
+                    cfg.target_class,
+                    cfg.source_class,
+                    copy.deepcopy(orig_model),
+                    cfg.dataset_dir,
+                    cfg.clean_model_path,
+                    cfg.global_seed,
+                )
     else:
         raise ValueError(f"Dataset {cfg.dataset} not recognized")  
     
