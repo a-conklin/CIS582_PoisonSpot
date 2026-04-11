@@ -134,6 +134,12 @@ def main() -> None:
             elif cfg.dataset == "imagenet":
                 for p in list(orig_model.fc1.parameters()) + list(orig_model.fc2.parameters()):
                     p.requires_grad = True
+            elif cfg.dataset == "hagrid":
+                in_features = orig_model.linear.in_features
+                orig_model.linear = nn.Linear(in_features, 19)
+            
+                for p in orig_model.linear.parameters():
+                    p.requires_grad = True
 
     elif (cfg.attack, cfg.dataset) in {("sa", "slt10"), ("lc", "imagenet")}:
         orig_model = orig_model.to(device)
