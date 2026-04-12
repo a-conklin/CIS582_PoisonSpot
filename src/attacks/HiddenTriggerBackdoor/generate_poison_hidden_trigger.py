@@ -569,27 +569,22 @@ def get_ht_hagrid_poisoned_data(
         
 
     class HagridDataset(Dataset):
-        def __init__(self, split="train", transform=None, size=25000):
-            from datasets import load_dataset
-    
-            hagrid = load_dataset("cj-mills/hagrid-sample-120k-384p", split=split)
-            hagrid = hagrid.shuffle(seed=42).select(range(size))
-    
-            self.data = hagrid
-            self.transform = transform
-    
-        def __len__(self):
-            return len(self.data)
-    
-        def __getitem__(self, idx):
-            item = self.data[idx]
-            image = item["image"]
-            label = item["label"]
-    
-            if self.transform:
-                image = self.transform(image)
-    
-            return image, label
+      def __init__(self, hf_dataset, transform=None):
+          self.data = hf_dataset
+          self.transform = transform
+
+      def __len__(self):
+          return len(self.data)
+
+      def __getitem__(self, idx):
+          item = self.data[idx]
+          image = item["image"]
+          label = item["label"]
+
+          if self.transform:
+              image = self.transform(image)
+
+          return image, label
 
         
     IMAGE_SIZE = 224
@@ -609,9 +604,15 @@ def get_ht_hagrid_poisoned_data(
     bs = 32
     num_classes = 19
     #Our chosen hagrid dataset does not have its own splits so we make our own
-    full_dataset = HagridDataset(split="train", transform=transform_train, size=25000)
-    train_set = full_dataset.select(range(20000))
-    val_set = full_dataset.select(range(20000, 25000))
+    from datasets import load_dataset as hf_load_dataset
+    hf = hf_load_dataset("cj-mills/hagrid-sample-120k-384p", split="train")
+    hf = hf.shuffle(seed=42)
+
+    train_hf = hf.select(range(20000))
+    val_hf   = hf.select(range(20000, 25000))
+
+    train_set = HagridDataset(train_hf, transform=transform_train)
+    val_set   = HagridDataset(val_hf, transform=transform_train)
 
     train_loader = DataLoader(train_set, batch_size=bs, shuffle=False)
     val_loader = DataLoader(val_set, batch_size=bs, shuffle=False)
