@@ -25,6 +25,7 @@ import logging
 
 from src import *
 from src.attacks.Narcissus.generate_poison_narcissus import get_narcissus_mnist_poisoned_data
+from src.attacks.HiddenTriggerBackdoor.generate_poison_hidden_trigger import get_ht_hagrid_poisoned_data
 import csv
 import json
 import shutil
