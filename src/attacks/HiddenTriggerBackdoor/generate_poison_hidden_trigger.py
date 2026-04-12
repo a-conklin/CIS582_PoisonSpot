@@ -598,9 +598,6 @@ def get_ht_hagrid_poisoned_data(
         transforms.Normalize(mean=MEAN_RGB, std=STDDEV_RGB)
     ])
 
-
-    data_dir = dataset_path + "tiny-imagenet-200/"
-    val_annotations_file = dataset_path + "tiny-imagenet-200/val/val_annotations.txt"
     bs = 32
     num_classes = 19
     #Our chosen hagrid dataset does not have its own splits so we make our own
@@ -608,8 +605,8 @@ def get_ht_hagrid_poisoned_data(
     hf = hf_load_dataset("cj-mills/hagrid-sample-120k-384p", split="train")
     hf = hf.shuffle(seed=42)
 
-    train_hf = hf.select(range(20000))
-    val_hf   = hf.select(range(20000, 25000))
+    train_hf = hf.select(range(20))
+    val_hf   = hf.select(range(20, 25))
 
     train_set = HagridDataset(train_hf, transform=transform_train)
     val_set   = HagridDataset(val_hf, transform=transform_train)
@@ -651,10 +648,29 @@ def get_ht_hagrid_poisoned_data(
     backdoor = PoisoningAttackBackdoor(mod)
 
         
-    with open(dataset_path + f'poison_indices_htbd_imgnet_vit_{poison_ratio}_{target_class}_{source_class}.npy', 'rb') as f:
+    with open(dataset_path + f'poison_indices_htbd_hagrid_vit_{poison_ratio}_{target_class}_{source_class}.npy', 'rb') as f:
         poison_indices = np.load(f)
-    with open(dataset_path + f'poison_data_htbd_imgnet_vit_{poison_ratio}_{target_class}_{source_class}.npy', 'rb') as f:
+    with open(dataset_path + f'poison_data_htbd_hagrid_vit_{poison_ratio}_{target_class}_{source_class}.npy', 'rb') as f:
         poison_data = np.load(f)
+
+    poisoned_data_path = dataset_path + f'poison_data_htbd_hagrid_{poison_ratio}_{target_class}_{source_class}.npy'
+    poisoned_indices_path = dataset_path + f'poison_indices_htbd_hagrid_{poison_ratio}_{target_class}_{source_class}.npy'
+
+
+    if not os.path.exists(poisoned_data_path) or not os.path.exists(poisoned_indices_path):
+        # "Generate Poison Data"
+        poison_attack = HiddenTriggerBackdoor(classifier, eps=16/255, target=target, source=source, feature_layer=19, backdoor=backdoor, decay_coeff = .95, decay_iter = 2000, max_iter=5000, batch_size=25, poison_percent=poison_ratio)
+       
+        x_train = x_train.numpy().transpose(0, 2, 3, 1).astype(np.float32)
+        poison_data, poison_indices = poison_attack.poison(x_train, y_train)
+        
+        print("Number of poison samples generated:", len(poison_data))
+        np.save(poisoned_data_path, poison_data)
+        np.save(poisoned_indices_path, poison_indices)
+
+    poison_data = np.load(poisoned_data_path)
+    poison_indices = np.load(poisoned_indices_path)
+    
     
     class CustomDataset(Dataset):
         def __init__(self, images, labels, indices, transform=None):
