@@ -569,7 +569,7 @@ def get_ht_hagrid_poisoned_data(
         
 
     class HagridDataset(Dataset):
-        def __init__(self, split="train", transform=None, size=20000):
+        def __init__(self, split="train", transform=None, size=25000):
             from datasets import load_dataset
     
             hagrid = load_dataset("cj-mills/hagrid-sample-120k-384p", split=split)
@@ -608,8 +608,10 @@ def get_ht_hagrid_poisoned_data(
     val_annotations_file = dataset_path + "tiny-imagenet-200/val/val_annotations.txt"
     bs = 32
     num_classes = 19
-    train_set = HagridDataset(split="train", transform=transform_train, size=20000)
-    val_set = HagridDataset(split="train", transform=transform_train, size=5000)
+    #Our chosen hagrid dataset does not have its own splits so we make our own
+    full_dataset = HagridDataset(split="train", transform=transform_train, size=25000)
+    train_set = full_dataset.select(range(20000))
+    val_set = full_dataset.select(range(20000, 25000))
 
     train_loader = DataLoader(train_set, batch_size=bs, shuffle=False)
     val_loader = DataLoader(val_set, batch_size=bs, shuffle=False)
