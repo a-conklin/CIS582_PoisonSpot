@@ -537,7 +537,7 @@ def get_ht_imagenet_poisoned_data(
 
 
 
-def get_ht_hagrid_poisoned_data(
+def get_ht_hagrid_poisoned_data_old(
     poison_ratio,
     target_class,
     source_class,
@@ -614,6 +614,8 @@ def get_ht_hagrid_poisoned_data(
     train_loader = DataLoader(train_set, batch_size=bs, shuffle=False)
     val_loader = DataLoader(val_set, batch_size=bs, shuffle=False)
 
+    print("Data is loaded")
+
     def collect_transformed_data(loader):
         transformed_data = []
         transformed_labels = []
@@ -646,16 +648,10 @@ def get_ht_hagrid_poisoned_data(
                                     size=(patch_size,patch_size), mode='RGB', blend=1)
         return x.astype(original_dtype)
     backdoor = PoisoningAttackBackdoor(mod)
-
-        
-    with open(dataset_path + f'poison_indices_htbd_hagrid_vit_{poison_ratio}_{target_class}_{source_class}.npy', 'rb') as f:
-        poison_indices = np.load(f)
-    with open(dataset_path + f'poison_data_htbd_hagrid_vit_{poison_ratio}_{target_class}_{source_class}.npy', 'rb') as f:
-        poison_data = np.load(f)
-
+    
+    
     poisoned_data_path = dataset_path + f'poison_data_htbd_hagrid_{poison_ratio}_{target_class}_{source_class}.npy'
     poisoned_indices_path = dataset_path + f'poison_indices_htbd_hagrid_{poison_ratio}_{target_class}_{source_class}.npy'
-
 
     if not os.path.exists(poisoned_data_path) or not os.path.exists(poisoned_indices_path):
         # "Generate Poison Data"
@@ -731,4 +727,226 @@ def get_ht_hagrid_poisoned_data(
 
     return poisoned_train_dataset,test_dataset, poisoned_test_dataset, poison_indices
 
+def get_ht_hagrid_poisoned_data(
+    poison_ratio,
+    target_class,
+    source_class,
+    model,
+    dataset_path='./src/data/',
+    clean_model_path="./src/saved_models/resnet18_200_clean.pth",
+    global_seed=545,
+    gpu_id=0
+):
+
+    import os
+    import numpy as np
+    import torch
+    from torch.utils.data import Dataset, DataLoader, Subset, TensorDataset
+    from datasets import load_dataset as hf_load_dataset
+    import torchvision.transforms as transforms
+
+    torch.manual_seed(global_seed)
+    np.random.seed(global_seed)
+
+    device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
+
+    # -----------------------------
+    # Dataset wrapper (NO change)
+    # -----------------------------
+    class HagridDataset(Dataset):
+        def __init__(self, hf_dataset, transform=None):
+            self.data = hf_dataset
+            self.transform = transform
+
+        def __len__(self):
+            return len(self.data)
+
+        def __getitem__(self, idx):
+            item = self.data[idx]
+            image = item["image"]
+            label = item["label"]
+
+            if self.transform:
+                image = self.transform(image)
+
+            return image, label
+
+    # -----------------------------
+    # transforms
+    # -----------------------------
+    IMAGE_SIZE = 224
+    MEAN_RGB = [0.485, 0.456, 0.406]
+    STDDEV_RGB = [0.229, 0.224, 0.225]
+
+    transform = transforms.Compose([
+        transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=MEAN_RGB, std=STDDEV_RGB)
+    ])
+
+    # -----------------------------
+    # Load HF dataset
+    # -----------------------------
+    hf = hf_load_dataset("cj-mills/hagrid-sample-120k-384p", split="train")
+    hf = hf.shuffle(seed=42)
+
+    train_hf = hf.select(range(20000))
+    val_hf   = hf.select(range(20000, 25000))
+
+    train_set = HagridDataset(train_hf, transform=transform)
+    val_set   = HagridDataset(val_hf, transform=transform)
+
+    train_loader = DataLoader(train_set, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
+    val_loader   = DataLoader(val_set, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
+
+    print("Data loaded")
+
+    # -----------------------------
+    # ART backdoor setup
+    # -----------------------------
+    from art.attacks.poisoning.backdoor_attack import PoisoningAttackBackdoor
+    from art.attacks.poisoning import perturbations
+
+    target = np.eye(19)[target_class]
+    source = np.eye(19)[source_class]
+
+    patch_size = 30
+    x_shift = 224 - patch_size - 5
+    y_shift = 224 - patch_size - 5
+
+    def mod(x):
+        return perturbations.insert_image(
+            x,
+            backdoor_path="./src/attacks/HiddenTriggerBackdoor/htbd.png",
+            channels_first=True,
+            random=False,
+            x_shift=x_shift,
+            y_shift=y_shift,
+            size=(patch_size, patch_size),
+            mode='RGB',
+            blend=1
+        )
+
+    backdoor = PoisoningAttackBackdoor(mod)
+
+    # -----------------------------
+    # Load or generate poison cache
+    # -----------------------------
+    poisoned_data_path = dataset_path + f'poison_data_htbd_hagrid_{poison_ratio}_{target_class}_{source_class}.npy'
+    poisoned_indices_path = dataset_path + f'poison_indices_htbd_hagrid_{poison_ratio}_{target_class}_{source_class}.npy'
+
+    # =========================================================
+    # STREAMING POISON GENERATION (NO FULL DATASET MATERIALIZE)
+    # =========================================================
+    if not os.path.exists(poisoned_data_path) or not os.path.exists(poisoned_indices_path):
+
+        print("Generating poison data (streaming mode)...")
+
+        poison_data = []
+        poison_indices = []
+
+        current_index = 0
+
+        # NOTE: assumes classifier + HiddenTriggerBackdoor exist in scope
+        poison_attack = HiddenTriggerBackdoor(
+            classifier,
+            eps=16/255,
+            target=target,
+            source=source,
+            feature_layer=19,
+            backdoor=backdoor,
+            decay_coeff=.95,
+            decay_iter=2000,
+            max_iter=2000,   # reduced for speed
+            batch_size=32,
+            poison_percent=poison_ratio
+        )
+
+        for batch_x, batch_y in train_loader:
+
+            batch_size = batch_x.shape[0]
+
+            # convert only batch (NOT full dataset)
+            x_np = batch_x.numpy().transpose(0, 2, 3, 1).astype(np.float32)
+
+            poisoned_batch_x, poisoned_batch_idx = poison_attack.poison(x_np, batch_y.numpy())
+
+            poison_data.append(poisoned_batch_x)
+            poison_indices.append(poisoned_batch_idx + current_index)
+
+            current_index += batch_size
+
+        poison_data = np.concatenate(poison_data, axis=0)
+        poison_indices = np.concatenate(poison_indices, axis=0)
+
+        np.save(poisoned_data_path, poison_data)
+        np.save(poisoned_indices_path, poison_indices)
+
+        print(f"Saved poison data: {len(poison_data)} samples")
+
+    else:
+        print("Loading cached poison data")
+        poison_data = np.load(poisoned_data_path)
+        poison_indices = np.load(poisoned_indices_path)
+
+    # -----------------------------
+    # Build final dataset (FAST)
+    # -----------------------------
+    poison_x = torch.stack([x for x, _ in train_set]).numpy()
+
+    poisoned_x = poison_x.copy()
+    poisoned_x[poison_indices] = poison_data
+
+    poisoned_y = torch.tensor([y for _, y in train_set]).numpy()
+
+    all_indices = np.arange(len(poisoned_y))
+
+    class CustomDataset(Dataset):
+        def __init__(self, images, labels, indices):
+            self.images = images
+            self.labels = labels
+            self.indices = indices
+
+        def __len__(self):
+            return len(self.images)
+
+        def __getitem__(self, idx):
+            return self.images[idx], self.labels[idx], self.indices[idx]
+
+    poisoned_train_dataset = CustomDataset(
+        poisoned_x,
+        poisoned_y,
+        all_indices
+    )
+
+    # -----------------------------
+    # TEST SET (unchanged logic)
+    # -----------------------------
+    x_test, y_test = [], []
+
+    for x, y in val_loader:
+        x_test.append(x)
+        y_test.append(y)
+
+    x_test = torch.cat(x_test).numpy()
+    y_test = torch.cat(y_test).numpy()
+
+    trigger_test_inds = np.where(y_test == source_class)[0]
+
+    test_poisoned_samples, _ = backdoor.poison(
+        x_test[trigger_test_inds],
+        np.eye(19)[y_test[trigger_test_inds]]
+    )
+
+    poisoned_test_dataset = TensorDataset(
+        torch.tensor(test_poisoned_samples),
+        torch.tensor([target_class] * len(test_poisoned_samples))
+    )
+
+    test_dataset = TensorDataset(
+        torch.tensor(x_test),
+        torch.tensor(y_test)
+    )
+
+    return poisoned_train_dataset, test_dataset, poisoned_test_dataset, poison_indices
 
