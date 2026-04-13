@@ -16,6 +16,7 @@ import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
 
 def get_ht_cifar10_poisoned_data(
     poison_ratio,
@@ -738,12 +739,8 @@ def get_ht_hagrid_poisoned_data(
     gpu_id=0
 ):
 
-    import os
-    import numpy as np
-    import torch
-    from torch.utils.data import Dataset, DataLoader, Subset, TensorDataset
     from datasets import load_dataset as hf_load_dataset
-    import torchvision.transforms as transforms
+
 
     torch.manual_seed(global_seed)
     np.random.seed(global_seed)
@@ -784,22 +781,82 @@ def get_ht_hagrid_poisoned_data(
         transforms.Normalize(mean=MEAN_RGB, std=STDDEV_RGB)
     ])
 
+    # Classifier
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(params=model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4, dampening=0, nesterov=True)
+    classifier = PyTorchClassifier(
+        model=model,
+        clip_values=(-2, 2),
+        loss=criterion,
+        optimizer=optimizer,
+        input_shape=(3, IMAGE_SIZE, IMAGE_SIZE),
+        nb_classes=19,
+        preprocessing=(tuple(MEAN_RGB), tuple(STDDEV_RGB))
+    )
+    print(classifier.layer_names)
+
     # -----------------------------
     # Load HF dataset
     # -----------------------------
+    # --- STEP 1: Load and Shuffle ---
     hf = hf_load_dataset("cj-mills/hagrid-sample-120k-384p", split="train")
-    hf = hf.shuffle(seed=42)
+    hf = hf.shuffle(seed=42).select(range(250))
 
-    train_hf = hf.select(range(20000))
-    val_hf   = hf.select(range(20000, 25000))
+    train_hf = hf.select(range(200))
+    val_hf   = hf.select(range(200, 250))
 
-    train_set = HagridDataset(train_hf, transform=transform)
-    val_set   = HagridDataset(val_hf, transform=transform)
+    # --- STEP 2: Define a Safe Generator ---
+    def materialize_data(hf_dataset, description="Processing"):
+        
+        
+        images = []
+        labels = []
+        
+        print(f"Starting {description}...")
+        for i in tqdm(range(len(hf_dataset)), desc=description):
+            # Accessing one by one avoids the Arrow/Multiprocessing deadlock
+            item = hf_dataset[i]
+            img = item['image'].convert("RGB")
+            
+            # Apply your existing 'transform' object
+            # (Assuming 'transform' is your transforms.Compose from earlier)
+            img_tensor = transform(img) 
+            
+            images.append(img_tensor.numpy())
+            labels.append(item['label'])
+            
+        return np.stack(images), np.array(labels)
 
-    train_loader = DataLoader(train_set, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
-    val_loader   = DataLoader(val_set, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
+    # --- STEP 3: Run it ---
+    x_train, y_train = materialize_data(train_hf, "Train Data")
+    x_test, y_test = materialize_data(val_hf, "Val Data")
+
+    print("Data Loaded successfully!")
 
     print("Data loaded")
+    
+
+    # Classifier Model Training
+
+    hagrid_classifier_model_path="./src/saved_models/hagrid_classifier_resnet18_200_clean.pth"
+      
+    if not os.path.exists(hagrid_classifier_model_path):
+        print("Started Clean Training")
+        classifier.fit(x_train, y_train, nb_epochs=100, batch_size=512)
+        for param_group in classifier.optimizer.param_groups:
+            print(param_group["lr"])
+            param_group["lr"] *= 0.1
+        classifier.fit(x_train, y_train, nb_epochs=50, batch_size=512)
+        for param_group in classifier.optimizer.param_groups:
+            print(param_group["lr"])
+            param_group["lr"] *= 0.1
+        classifier.fit(x_train, y_train, nb_epochs=50, batch_size=512)
+        torch.save(model.state_dict(), hagrid_classifier_model_path)
+        print("Finished Clean Training")
+
+    model.load_state_dict(torch.load(hagrid_classifier_model_path))
+
+    print("Classifier Trained")
 
     # -----------------------------
     # ART backdoor setup
@@ -828,7 +885,8 @@ def get_ht_hagrid_poisoned_data(
         )
 
     backdoor = PoisoningAttackBackdoor(mod)
-
+    print("Backdoor Created")
+    
     # -----------------------------
     # Load or generate poison cache
     # -----------------------------
@@ -840,64 +898,80 @@ def get_ht_hagrid_poisoned_data(
     # =========================================================
     if not os.path.exists(poisoned_data_path) or not os.path.exists(poisoned_indices_path):
 
-        print("Generating poison data (streaming mode)...")
+        print("Generating poison data (optimized chunking mode)...")
 
         poison_data = []
         poison_indices = []
-
-        current_index = 0
-
-        # NOTE: assumes classifier + HiddenTriggerBackdoor exist in scope
+    
+        # Settings
+        BATCH_SIZE = 32  # Match the attack batch size
+        # We use the pre-mapped train_hf which is already in NumPy format
+        num_samples = len(train_hf)
+    
         poison_attack = HiddenTriggerBackdoor(
             classifier,
             eps=16/255,
             target=target,
             source=source,
-            feature_layer=19,
+            feature_layer="layer4",
             backdoor=backdoor,
             decay_coeff=.95,
             decay_iter=2000,
-            max_iter=2000,   # reduced for speed
-            batch_size=32,
-            poison_percent=poison_ratio
+            max_iter=2000,
+            batch_size=BATCH_SIZE,
+            poison_percent=poison_ratio/100
         )
+    
+       # Use a standard tqdm loop over the NumPy arrays
+        for i in tqdm(range(0, num_samples, BATCH_SIZE), desc="Poisoning Batches"):
+            
+            # 1. Slice the pre-materialized NumPy arrays
+            x_batch = x_train[i : i + BATCH_SIZE]
+            y_batch = y_train[i : i + BATCH_SIZE]
+            
+            # 2. Transpose for ART if necessary 
+            # (materialize_data produced N, C, H, W; ART usually wants N, H, W, C)
+            # if x_batch.shape[1] == 3:
+            #     x_batch = x_batch.transpose(0, 2, 3, 1)
 
-        for batch_x, batch_y in train_loader:
+            # 3. Generate poison
+            # Note: x_batch is already float32 from our materialize function
+            print(x_batch.shape)
+            poisoned_batch_x, poisoned_batch_idx = poison_attack.poison(x_batch, y_batch)
 
-            batch_size = batch_x.shape[0]
+            # 4. Store and adjust indices
+            if len(poisoned_batch_x) > 0:
+                poison_data.append(poisoned_batch_x)
+                # Adjust local batch indices to global dataset indices
+                poison_indices.append(poisoned_batch_idx + i)
 
-            # convert only batch (NOT full dataset)
-            x_np = batch_x.numpy().transpose(0, 2, 3, 1).astype(np.float32)
-
-            poisoned_batch_x, poisoned_batch_idx = poison_attack.poison(x_np, batch_y.numpy())
-
-            poison_data.append(poisoned_batch_x)
-            poison_indices.append(poisoned_batch_idx + current_index)
-
-            current_index += batch_size
-
-        poison_data = np.concatenate(poison_data, axis=0)
-        poison_indices = np.concatenate(poison_indices, axis=0)
-
-        np.save(poisoned_data_path, poison_data)
-        np.save(poisoned_indices_path, poison_indices)
-
-        print(f"Saved poison data: {len(poison_data)} samples")
+        # Concatenate and Save
+        if poison_data:
+            poison_data = np.concatenate(poison_data, axis=0)
+            poison_indices = np.concatenate(poison_indices, axis=0)
+            
+            np.save(poisoned_data_path, poison_data)
+            np.save(poisoned_indices_path, poison_indices)
+            print(f"Saved poison data: {len(poison_data)} samples")
 
     else:
         print("Loading cached poison data")
         poison_data = np.load(poisoned_data_path)
         poison_indices = np.load(poisoned_indices_path)
 
+    print("Poison Data Creation Complete")
+
     # -----------------------------
     # Build final dataset (FAST)
     # -----------------------------
-    poison_x = torch.stack([x for x, _ in train_set]).numpy()
+    # poison_x = torch.stack([x for x, _ in train_set]).numpy()
+    poison_x = np.copy(x_train)
 
     poisoned_x = poison_x.copy()
     poisoned_x[poison_indices] = poison_data
 
-    poisoned_y = torch.tensor([y for _, y in train_set]).numpy()
+    # poisoned_y = torch.tensor([y for _, y in train_set]).numpy()
+    poisoned_y = train_hf["label"].numpy()
 
     all_indices = np.arange(len(poisoned_y))
 
@@ -919,34 +993,43 @@ def get_ht_hagrid_poisoned_data(
         all_indices
     )
 
+    print("Poisoned Training Dataset Built")
+
     # -----------------------------
-    # TEST SET (unchanged logic)
+    # TEST SET 
     # -----------------------------
-    x_test, y_test = [], []
 
-    for x, y in val_loader:
-        x_test.append(x)
-        y_test.append(y)
+    # x_test = val_hf[:]["pixel_values"]
+    # y_test = val_hf[:]["label"]
 
-    x_test = torch.cat(x_test).numpy()
-    y_test = torch.cat(y_test).numpy()
+    # 2. Transpose ONLY for the ART attack call (to HWC)
+    x_test_art = x_test.transpose(0, 2, 3, 1)
 
+    # 3. Find indices for the source class
     trigger_test_inds = np.where(y_test == source_class)[0]
 
+    # 4. Generate the poisoned test samples
+    # Passing the transposed data to ART
     test_poisoned_samples, _ = backdoor.poison(
-        x_test[trigger_test_inds],
-        np.eye(19)[y_test[trigger_test_inds]]
+        x_test_art[trigger_test_inds],
+        y_test[trigger_test_inds]
     )
 
+    # 5. Transpose ART's output back to (N, 3, 224, 224) for the PyTorch TensorDataset
+    test_poisoned_samples = test_poisoned_samples.transpose(0, 3, 1, 2)
+
+    # 6. Build final datasets
     poisoned_test_dataset = TensorDataset(
-        torch.tensor(test_poisoned_samples),
+        torch.from_numpy(test_poisoned_samples).float(),
         torch.tensor([target_class] * len(test_poisoned_samples))
     )
 
     test_dataset = TensorDataset(
-        torch.tensor(x_test),
+        torch.from_numpy(x_test).float(), # x_test is already (N, 3, 224, 224)
         torch.tensor(y_test)
     )
+
+    print("Test and Poisoned Test Datasets Built")
 
     return poisoned_train_dataset, test_dataset, poisoned_test_dataset, poison_indices
 
