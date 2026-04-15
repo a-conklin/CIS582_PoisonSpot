@@ -572,23 +572,6 @@ def get_narcissus_hagrid_poisoned_data(
     hf = hf_load_dataset("cj-mills/hagrid-sample-120k-384p", split="train")
     hf = hf.shuffle(seed=42).select(range(hagrid_totalsize))
 
-    # def materialize_data(hf_dataset, description="Processing", transform=transform_tensor):
-    #
-    #     image_data = []
-    #     label_data = []
-    #
-    #     print(f"Starting {description}...")
-    #     for i in tqdm(range(len(hf_dataset)), desc=description):
-    #         # Accessing one by one avoids the Arrow/Multiprocessing deadlock
-    #         item = hf_dataset[i]
-    #         img = item['image'].convert("RGB")
-    #
-    #         img_tensor = transform(img)
-    #
-    #         image_data.append(img_tensor.numpy())
-    #         label_data.append(item['label'])
-    #
-    #     return np.stack(image_data), np.array(label_data)
 
     def materialize_data(hf_dataset, description="Processing", transform=None, batch_size=32):
         image_data = []
@@ -644,12 +627,12 @@ def get_narcissus_hagrid_poisoned_data(
 
         patch_mode = 'add'
 
-        surrogate_IMAGE_SIZE = 224
+        surrogate_IMAGE_SIZE = IMAGE_SIZE
 
         # TOP SPEED DEBUG VALUES
-        surrogate_epochs = 20
-        warmup_round = 2
-        gen_round = 50
+        surrogate_epochs = 100
+        # warmup_round = 2
+        gen_round = 500
 
 
         # The argumention use for surrogate model training stage
@@ -675,30 +658,44 @@ def get_narcissus_hagrid_poisoned_data(
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ])
 
-        # -----------------------------
-        # Load HF dataset
-        # -----------------------------
-        # --- STEP 1: Load and Shuffle ---
-
-
+        #Get Hagrid
         train_hf = hagrid.select(range(hagrid_trainsize))
         val_hf = hagrid.select(range(hagrid_trainsize, hagrid_totalsize))
 
-        # --- STEP 2: Define a Safe Generator ---
+        trainpath_s = datasets_root_dir + '/hagrid-384/hagrid_surrogate_train.pt'
+        testpath_s = datasets_root_dir + '/hagrid-384/hagrid_surrogate_test.pt'
+
+        if not os.path.exists(trainpath_s) or not os.path.exists(testpath_s):
+            print("Cache not found. Building dataset...")
+            x_train, y_train = materialize_data(train_hf, "Train Data", transform_train)
+            x_test, y_test = materialize_data(val_hf, "Val Data", transform_test)
+
+            print(f"Saving dataset to cache: {trainpath_s}")
+            torch.save({
+                "x": x_train,
+                "y": y_train
+            }, trainpath_s)
+            print(f"Saving dataset to cache: {testpath_s}")
+            torch.save({
+                "x": x_test,
+                "y": y_test
+            }, testpath_s)
 
 
-        # --- STEP 3: Run it ---
-        x_train, y_train = materialize_data(train_hf, "Train Data", transform_train)
-        x_test, y_test = materialize_data(val_hf, "Val Data", transform_test)
+        print(f"Loading dataset from cache: {trainpath_s}")
+        traindata = torch.load(trainpath_s)
+        x_train = traindata["x"]
+        y_train = traindata["y"]
+        print(f"Loading dataset from cache: {testpath_s}")
+        testdata = torch.load(testpath_s)
+        x_test = testdata["x"]
+        y_test = testdata["y"]
 
-        print("Data loaded")
 
-        # ori_train = torchvision.datasets.CIFAR10(root=datasets_root_dir, train=True, download=True,
-        #                                          transform=transform_train)
-        # ori_test = torchvision.datasets.CIFAR10(root=datasets_root_dir, train=False, download=True,
-        #                                         transform=transform_test)
+        # x_train, y_train = materialize_data(train_hf, "Train Data", transform_train)
+        # x_test, y_test = materialize_data(val_hf, "Val Data", transform_test)
 
-        #Get tinyimagenet but then subset for training speed
+        # Get tinyimagenet but then subset for training speed
         outter_trainset = torchvision.datasets.ImageFolder(root=datasets_root_dir + '/tiny-imagenet-200/train/',
                                                            transform=transform_surrogate_train)
         subset_indices = np.random.choice(len(outter_trainset), tinyimage_subsetsize, replace=False)
@@ -722,6 +719,10 @@ def get_narcissus_hagrid_poisoned_data(
 
         ori_train = HagridDataset(x_train, y_train)
 
+        print("Data loaded")
+
+
+        #Make the datasets & loaders
         train_target_list = list(np.where(np.array(train_label) == lab)[0])
         train_target = Subset(ori_train, train_target_list)
 
@@ -843,8 +844,34 @@ def get_narcissus_hagrid_poisoned_data(
     train_hf = hf.select(range(hagrid_trainsize))
     val_hf = hf.select(range(hagrid_trainsize, hagrid_totalsize))
 
-    x_train, y_train = materialize_data(train_hf, "Train Data", transform_tensor)
-    x_test, y_test = materialize_data(val_hf, "Val Data", transform_tensor)
+    trainpath = datasets_root_dir + '/hagrid-384/hagrid_train.pt'
+    testpath = datasets_root_dir + '/hagrid-384/hagrid_test.pt'
+
+    if not os.path.exists(trainpath) or not os.path.exists(testpath):
+        print("Cache not found. Building dataset...")
+        x_train, y_train = materialize_data(train_hf, "Train Data", transform_tensor)
+        x_test, y_test = materialize_data(val_hf, "Val Data", transform_tensor)
+
+        print(f"Saving dataset to cache: {trainpath}")
+        torch.save({
+            "x": x_train,
+            "y": y_train
+        }, trainpath)
+        print(f"Saving dataset to cache: {testpath}")
+        torch.save({
+            "x": x_test,
+            "y": y_test
+        }, testpath)
+
+
+    print(f"Loading dataset from cache: {trainpath}")
+    traindata = torch.load(trainpath)
+    x_train = traindata["x"]
+    y_train = traindata["y"]
+    print(f"Loading dataset from cache: {testpath}")
+    testdata = torch.load(testpath)
+    x_test = testdata["x"]
+    y_test = testdata["y"]
 
     print("Data loaded")
 
