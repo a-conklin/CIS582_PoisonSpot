@@ -1,0 +1,1 @@
+Hagrid data is super slow to transform, so cached values are stored here to try and speed up some processes, or serve as a checkpoint if a process fails late.
