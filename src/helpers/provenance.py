@@ -567,7 +567,7 @@ def capture_sample_level_weight_updates_idv(
         target_indices = [dataset[i][2] for i in range(len(dataset)) if dataset[i][1] == target_class and dataset[i][2] not in random_sus_idx]
     else:
         transform_train = Compose([
-            RandomCrop(32, padding=4),
+            # RandomCrop(32, padding=4), #This causes issues with image datasets that aren't exactly 32x32 (stack() fails due to the shape mismatch)
             RandomHorizontalFlip(),
         ])
         
