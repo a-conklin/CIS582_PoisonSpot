@@ -630,7 +630,7 @@ def get_narcissus_hagrid_poisoned_data(
         surrogate_IMAGE_SIZE = IMAGE_SIZE
 
         # TOP SPEED DEBUG VALUES
-        surrogate_epochs = 100
+        surrogate_epochs = 55
         # warmup_round = 2
         gen_round = 500
 
