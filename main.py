@@ -26,6 +26,7 @@ import logging
 from src import *
 from src.attacks.Narcissus.generate_poison_narcissus import get_narcissus_mnist_poisoned_data
 from src.attacks.HiddenTriggerBackdoor.generate_poison_hidden_trigger import get_ht_hagrid_poisoned_data
+from src.attacks.Narcissus.generate_poison_narcissus import get_narcissus_hagrid_poisoned_data
 import csv
 import json
 import shutil
@@ -94,7 +95,7 @@ def main() -> None:
     # models
     if cfg.model == "ResNet18":
         orig_model = ResNet(18)
-        if cfg.dataset in {"MNIST"}:
+        if cfg.dataset == "MNIST":
             orig_model.conv1 = nn.Conv2d(
                 1,  # input channels
                 64,
@@ -103,6 +104,9 @@ def main() -> None:
                 padding=1,
                 bias=False
             )
+        elif cfg.dataset == "hagrid":
+            in_features = orig_model.linear.in_features
+            orig_model.linear = nn.Linear(in_features, 19)
     elif cfg.model == "CustomCNN":
         orig_model = CustomCNN()
     elif cfg.model == "BasicResNet":
@@ -309,6 +313,16 @@ def main() -> None:
                     copy.deepcopy(orig_model),
                     cfg.dataset_dir,
                     cfg.clean_model_path,
+                    cfg.global_seed,
+                )
+        elif cfg.attack == "narcissus":
+            poisoned_train_dataset, test_dataset, poisoned_test_dataset, poison_indices = \
+                get_narcissus_hagrid_poisoned_data(
+                    cfg.pr_tgt,
+                    cfg.target_class,
+                    cfg.dataset_dir,
+                    copy.deepcopy(orig_model),
+                    cfg.eps,
                     cfg.global_seed,
                 )
     else:
