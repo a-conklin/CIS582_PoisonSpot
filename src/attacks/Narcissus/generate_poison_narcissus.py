@@ -565,7 +565,8 @@ def get_narcissus_hagrid_poisoned_data(
     transform_tensor = transforms.Compose([
         transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        transforms.Normalize((0.485, 0.456, 0.406),
+          (0.229, 0.224, 0.225))
     ])
 
     # Get Hagrid
@@ -640,7 +641,7 @@ def get_narcissus_hagrid_poisoned_data(
             transforms.Resize((surrogate_IMAGE_SIZE, surrogate_IMAGE_SIZE)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         ])
 
         # The argumention use for all training set
@@ -648,14 +649,14 @@ def get_narcissus_hagrid_poisoned_data(
             transforms.Resize((surrogate_IMAGE_SIZE, surrogate_IMAGE_SIZE)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         ])
 
         # The argumention use for all testing set
         transform_test = transforms.Compose([
             transforms.Resize((surrogate_IMAGE_SIZE, surrogate_IMAGE_SIZE)),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         ])
 
         #Get Hagrid
@@ -915,9 +916,5 @@ def get_narcissus_hagrid_poisoned_data(
     print("max label:", max(labels))
     print("min label:", min(labels))
     print("count unique:", len(set(labels)))
-
-    print(type(poison_train_target[0][1]))
-    print(type(poison_train_target[1][1]))
-    print(type(poison_train_target[2][1]))
 
     return poison_train_target, poi_ori_test, test_non_target_change_image_label, random_poison_idx
