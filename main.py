@@ -105,8 +105,13 @@ def main() -> None:
                 bias=False
             )
         elif cfg.dataset == "hagrid":
-            in_features = orig_model.linear.in_features
-            orig_model.linear = nn.Linear(in_features, 19)
+            if cfg.scenario == "from_scratch":
+                in_features = orig_model.linear.in_features
+                orig_model.linear = nn.Linear(in_features, 19)
+            elif cfg.scenario == "fine_tuning":
+                orig_model = torchvision.models.resnet18(pretrained=True)
+                orig_model.fc = torch.nn.Linear(orig_model.fc.in_features, 19)
+                torch.save(orig_model.state_dict(), cfg.clean_model_path)
     elif cfg.model == "CustomCNN":
         orig_model = CustomCNN()
     elif cfg.model == "BasicResNet":
