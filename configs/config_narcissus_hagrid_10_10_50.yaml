@@ -6,22 +6,22 @@ attack: narcissus
 # dataset / model choices
 dataset: hagrid
 model: ResNet18
-scenario: from_scratch
+scenario: fine_tuning
 
 # data paths
 dataset_dir: src/data/
-clean_model_path: ./src/saved_models/resnet18_200_clean.pth
+clean_model_path: ./src/saved_models/resnet18_pretrained.pth
 saved_models_path: ./src/saved_models/
 results_path: ./src/results/
 prov_path: ./src/Training_Prov_Data/
 exp: 
 
 # training schedule
-epochs: 100 #200
+epochs: 200
 ep_bl: 1
-ep_bl_base: 100 #200
+ep_bl_base: 200
 ep_sl: 10
-ep_sl_base: 100 #200
+ep_sl_base: 200
 
 
 # batch sizes
@@ -50,7 +50,7 @@ force: false
 # misc
 gpu_id: 0
 global_seed: 545
-lr: 0.1
+lr: 0.001
 opt: sgd
 training_mode: true
 sample_from_test: false
