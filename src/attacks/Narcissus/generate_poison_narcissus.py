@@ -553,8 +553,8 @@ def get_narcissus_hagrid_poisoned_data(
     np.random.seed(global_seed)
     random.seed(global_seed)
 
-    hagrid_trainsize = 1000
-    hagrid_testsize = 500
+    hagrid_trainsize = 4000
+    hagrid_testsize = 1000
     hagrid_totalsize = hagrid_trainsize + hagrid_testsize
     tinyimage_subsetsize = 20000
 
@@ -632,8 +632,8 @@ def get_narcissus_hagrid_poisoned_data(
 
         # TOP SPEED DEBUG VALUES
         surrogate_epochs = 55
-        # warmup_round = 2
-        gen_round = 500
+        warmup_round = 10
+        # gen_round = 500
 
 
         # The argumention use for surrogate model training stage
@@ -810,7 +810,10 @@ def get_narcissus_hagrid_poisoned_data(
                 new_images = torch.clamp(apply_noise_patch(clamp_batch_pert, new_images.clone(), mode=patch_mode), -1,
                                          1)
                 per_logits = poi_warm_up_model.forward(new_images)
-                loss = criterion(per_logits, labels)
+                # Targeted attack - via chatgpt, targeted narcissus attack to try and raise ASR
+                # loss = criterion(per_logits, labels)
+                target_labels = torch.full_like(labels, lab)
+                loss = criterion(per_logits, target_labels)
                 loss_regu = torch.mean(loss)
                 batch_opt.zero_grad()
                 loss_list.append(float(loss_regu.data))
@@ -840,7 +843,6 @@ def get_narcissus_hagrid_poisoned_data(
         print('Loading Narcissus trigger')
         with open(trigger_dir, 'rb') as f:
             narcissus_trigger = pickle.load(f)
-
 
     train_hf = hf.select(range(hagrid_trainsize))
     val_hf = hf.select(range(hagrid_trainsize, hagrid_totalsize))
@@ -893,7 +895,7 @@ def get_narcissus_hagrid_poisoned_data(
     # Poison training
     poison_amount = int(len(train_target_list) * poison_ratio)
     random_poison_idx = random.sample(train_target_list, poison_amount)
-    poison_train_target = poison_image(poi_ori_train, random_poison_idx, narcissus_trigger.cpu(), transform_after_train)
+    poison_train_target = poison_image(poi_ori_train, random_poison_idx, narcissus_trigger.cpu(), None)
     print('Training dataset size is:', len(poison_train_target), " Poison numbers is:", len(random_poison_idx))
     # assert set(random_poison_idx) & set(random_clean_idx) == set()
 
