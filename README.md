@@ -19,7 +19,8 @@ PoisonSpot/
 │   │   ├── mixed/
 │   │   ├── Narcissus/         # **Updated** Added a new function to perform a narcissus attack on the HaGRID Dataset
 │   │   └── Sleeperagent/
-│   ├── data/                  # **Updated** Updated folder structure to store transformed HaGRID data while running experiments to speed up successive attempts.
+│   ├── data/
+|   │   └── hagrid-384/        # **Updated** Updated folder structure to store transformed HaGRID data while running experiments to speed up successive attempts.
 │   ├── helpers/               
 │   │   ├── data.py            # Data loading function
 │   │   ├── provenance.py      # **Updated** Commented out a single line that was forcing images to 32x32 and breaking stacks with the larger HaGRID images
