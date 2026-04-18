@@ -3,7 +3,7 @@
 <p align="center">
 </p>
 
-This repository contains modifications to the original PoisonSpot code https://github.com/um-dsp/PoisonSpot in order to facilitate experiments using the HaGRID Dataset
+This repository contains modifications to the original PoisonSpot code https://github.com/um-dsp/PoisonSpot in order to facilitate experiments using the HaGRID 384p Sample Dataset https://huggingface.co/datasets/cj-mills/hagrid-sample-120k-384p
 
 
 
