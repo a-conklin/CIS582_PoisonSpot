@@ -10,28 +10,28 @@ This repository contains modifications to the original PoisonSpot code https://g
 ## Overview of the folder structure
 ```
 PoisonSpot/
-├── configs/                   # *Updated* Added a new configuration that runs a narcissus attack using the HaGRID dataset with poison rate 10% and suspected poison rate 50%
+├── configs/                   # **Updated** Added a new configuration that runs a narcissus attack using the HaGRID dataset with poison rate 10% and suspected poison rate 50%
 ├── src/                       # Source code
 │   ├── attacks/               # Attack implementations
 │   │   ├── HiddenTriggerBackdoor/
 │   │   ├── Labelconsistent/
 │   │   ├── mixed/
-│   │   ├── Narcissus/         # *Updated* Added a new function to perform a narcissus attack on the HaGRID Dataset
+│   │   ├── Narcissus/         # **Updated** Added a new function to perform a narcissus attack on the HaGRID Dataset
 │   │   └── Sleeperagent/
-│   ├── data/                  # *Updated* Updated folder structure to store transformed HaGRID data while running experiments to speed up successive attempts.
+│   ├── data/                  # **Updated** Updated folder structure to store transformed HaGRID data while running experiments to speed up successive attempts.
 │   ├── helpers/               
 │   │   ├── data.py            # Data loading function
-│   │   ├── provenance.py      # *Updated* Commented out a single line that was forcing images to 32x32 and breaking stacks with the larger HaGRID images
+│   │   ├── provenance.py      # **Updated** Commented out a single line that was forcing images to 32x32 and breaking stacks with the larger HaGRID images
 │   │   ├── scoring.py         # Score samples for poisoning 
 │   │   └── train.py           # model training funciton 
 │   ├── models/                # Model definitions (e.g., ResNet)
-│   ├── results/               # *Updated* Added results from last HaGRID run
+│   ├── results/               # **Updated** Added results from last HaGRID run
 │   ├── saved_models/          # Model checkpoints for clean training, poisoned training, and retraining. 
 │   ├── temp_folder/           # Temporary folder to save model during provenance capture
 │   └── Training_Prov_Data/    # Stores captured provenance data (batch-level & sample-level) 
-├── main.py                    # *Updated* Added additional branches to the code to support the new HaGRID experiment path
-├── README.md                  # *Updated* Modified this to discuss whats new, as you can tell since you're reading this!
-└── requirements.txt           # *Updated* Removed some libraries that weren't being used and made some minor updates to be compatible with Colab
+├── main.py                    # **Updated** Added additional branches to the code to support the new HaGRID experiment path
+├── README.md                  # **Updated** Modified this to discuss whats new, as you can tell since you're reading this!
+└── requirements.txt           # **Updated** Removed some libraries that weren't being used and made some minor updates to be compatible with Colab
 ```
 
 ## New Configuration Files
@@ -52,7 +52,13 @@ This section is small since there's only one- a narcissus attack utilizing the H
 ### Software (tested on)
 
 - **Python:** 3.12
-- **CUDA version:** 12.5  
+- **CUDA version:** 12.5
+
+---
+---
+---
+
+## Remainder is identical to the Original README
 
 
 
@@ -107,10 +113,6 @@ This section is small since there's only one- a narcissus attack utilizing the H
 
 
 ---
-
-
-## Remainder is identical to the Original README
-
 
 
 ## Installation
