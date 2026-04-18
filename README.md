@@ -1,7 +1,8 @@
 
-# **Applying Poisonspot to the HaGRID Dataset**
-<p align="center">
-</p>
+# **CIS582 Project**
+# **Alex Conklin**
+# ** Applying Poisonspot to the HaGRID Dataset**
+---
 
 This repository contains modifications to the original PoisonSpot code https://github.com/um-dsp/PoisonSpot in order to facilitate experiments using the HaGRID 384p Sample Dataset https://huggingface.co/datasets/cj-mills/hagrid-sample-120k-384p
 
