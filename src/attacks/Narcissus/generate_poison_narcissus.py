@@ -270,7 +270,7 @@ def get_narcissus_cifar10_poisoned_data(
 
     return poison_train_target, poi_ori_test, test_non_target_change_image_label, random_poison_idx
 
-
+# Old MNIST attempt from when I was still getting accustomed to the repo
 def get_narcissus_mnist_poisoned_data(
         poison_ratio,
         target_class=2,
@@ -519,7 +519,8 @@ def get_narcissus_mnist_poisoned_data(
 
     return poison_train_target, poi_ori_test, test_non_target_change_image_label, random_poison_idx
 
-
+#This function, based off the CIFAR code above, goes and gets a subset of the HaGRID dataset
+# and uses it to create a poisoned training set as well as a test set
 def get_narcissus_hagrid_poisoned_data(
         poison_ratio,
         target_class=2,
@@ -553,6 +554,9 @@ def get_narcissus_hagrid_poisoned_data(
     np.random.seed(global_seed)
     random.seed(global_seed)
 
+    # Pick the size of your hagrid training and test sets here.
+    # Warning- the materialize loop takes about 1.5s per image,
+    # meaning large numbers here will take a VERY long time
     hagrid_trainsize = 4000
     hagrid_testsize = 1000
     hagrid_totalsize = hagrid_trainsize + hagrid_testsize
@@ -579,7 +583,7 @@ def get_narcissus_hagrid_poisoned_data(
         label_data = []
 
         print(f"Starting {description}...")
-
+        # Batching logic courtesy of chatgpt- Though I didn't see any real speedup so the old one by one code was probably fine
         for i in tqdm(range(0, len(hf_dataset), batch_size), desc=description):
             batch = hf_dataset[i:i + batch_size]
 
@@ -609,12 +613,29 @@ def get_narcissus_hagrid_poisoned_data(
 
     # Generate Narcissus trigger function
     def narcissus_gen(dataset_path, lab, eps, hagrid):
+
+        ###############################################
+        #    NOTICE ON ALL THE COMMENTED OUT CODE     #
+        ###############################################
+        # Originally this was designed to more or less match the cifar implementation
+        # That meant training a fresh resnet using tinyimage + the target class
+        # For the powerful pretrained resnet this meant that the attacks just weren't very effective
+        # The solution- rather than training a surrogate on imagenet, grab another pretrained model
+        # and use that. This also has the happy side effect of skipping an hour or so of training time.
+        # So the commented code pertains to the imagenet strategy, while the remaining code just grabs a
+        # pretrained resnet and builds the trigger with it.
+        # For the record this change in strategies bumped ASR from ~5% -> ~70%
+        ###############################################
+        
         noise_size = 224 #32
 
         l_inf_r = eps / 255
 
-        model = ResNet(18, num_classes=201)
-        surrogate_model = model.to(device)
+        # model = ResNet(18, num_classes=201)
+        # surrogate_model = model.to(device)
+
+        # poi_warm_up_model = model
+
         generating_model = model.to(device)
         surrogate_epochs = 200
 
@@ -631,6 +652,8 @@ def get_narcissus_hagrid_poisoned_data(
         surrogate_IMAGE_SIZE = IMAGE_SIZE
 
         # TOP SPEED DEBUG VALUES
+        # Turned final values because the 200 epochs was way too much
+        # Also irrelevant now that were using pretrained resnet as the surrogate
         surrogate_epochs = 55
         warmup_round = 10
         # gen_round = 500
@@ -666,6 +689,7 @@ def get_narcissus_hagrid_poisoned_data(
         trainpath_s = datasets_root_dir + '/hagrid-384/hagrid_surrogate_train.pt'
         testpath_s = datasets_root_dir + '/hagrid-384/hagrid_surrogate_test.pt'
 
+        # Save the data after transforms. This can save hours on later attempts!!
         if not os.path.exists(trainpath_s) or not os.path.exists(testpath_s):
             print("Cache not found. Building dataset...")
             x_train, y_train = materialize_data(train_hf, "Train Data", transform_train)
@@ -697,23 +721,23 @@ def get_narcissus_hagrid_poisoned_data(
         # x_test, y_test = materialize_data(val_hf, "Val Data", transform_test)
 
         # Get tinyimagenet but then subset for training speed
-        outter_trainset = torchvision.datasets.ImageFolder(root=datasets_root_dir + '/tiny-imagenet-200/train/',
-                                                           transform=transform_surrogate_train)
-        subset_indices = np.random.choice(len(outter_trainset), tinyimage_subsetsize, replace=False)
-        tiny_subset = torch.utils.data.Subset(outter_trainset, subset_indices)
+        # outter_trainset = torchvision.datasets.ImageFolder(root=datasets_root_dir + '/tiny-imagenet-200/train/',
+        #                                                    transform=transform_surrogate_train)
+        # subset_indices = np.random.choice(len(outter_trainset), tinyimage_subsetsize, replace=False)
+        # tiny_subset = torch.utils.data.Subset(outter_trainset, subset_indices)
 
-        class SubsetWithClasses(torch.utils.data.Dataset):
-            def __init__(self, subset, original_dataset):
-                self.subset = subset
-                self.classes = original_dataset.classes  # preserve this
+        # class SubsetWithClasses(torch.utils.data.Dataset):
+        #     def __init__(self, subset, original_dataset):
+        #         self.subset = subset
+        #         self.classes = original_dataset.classes  # preserve this
+        #
+        #     def __len__(self):
+        #         return len(self.subset)
+        #
+        #     def __getitem__(self, idx):
+        #         return self.subset[idx]
 
-            def __len__(self):
-                return len(self.subset)
-
-            def __getitem__(self, idx):
-                return self.subset[idx]
-
-        tiny_subset = SubsetWithClasses(tiny_subset, outter_trainset)
+        # tiny_subset = SubsetWithClasses(tiny_subset, outter_trainset)
 
         train_label = y_train
         test_label = y_test
@@ -727,14 +751,14 @@ def get_narcissus_hagrid_poisoned_data(
         train_target_list = list(np.where(np.array(train_label) == lab)[0])
         train_target = Subset(ori_train, train_target_list)
 
-        concoct_train_dataset = concoct_dataset(train_target, tiny_subset)
+        # concoct_train_dataset = concoct_dataset(train_target, tiny_subset)
 
 
-        surrogate_loader = torch.utils.data.DataLoader(concoct_train_dataset, batch_size=train_batch_size, shuffle=True,
-                                                       num_workers=2)
-
-        poi_warm_up_loader = torch.utils.data.DataLoader(train_target, batch_size=train_batch_size, shuffle=True,
-                                                         num_workers=2)
+        # surrogate_loader = torch.utils.data.DataLoader(concoct_train_dataset, batch_size=train_batch_size, shuffle=True,
+        #                                                num_workers=2)
+        #
+        # poi_warm_up_loader = torch.utils.data.DataLoader(train_target, batch_size=train_batch_size, shuffle=True,
+        #                                                  num_workers=2)
 
         trigger_gen_loaders = torch.utils.data.DataLoader(train_target, batch_size=train_batch_size, shuffle=True,
                                                           num_workers=2)
@@ -742,61 +766,61 @@ def get_narcissus_hagrid_poisoned_data(
         condition = True
         noise = torch.zeros((1, 3, noise_size, noise_size), device=device)
 
-        surrogate_model = surrogate_model
+        # surrogate_model = surrogate_model
         criterion = torch.nn.CrossEntropyLoss()
         # outer_opt = torch.optim.RAdam(params=base_model.parameters(), lr=generating_lr_outer)
-        surrogate_opt = torch.optim.SGD(params=surrogate_model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
-        surrogate_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(surrogate_opt, T_max=surrogate_epochs)
-
-        # Training the surrogate model
-        print('Training the surrogate model')
-        for epoch in range(0, surrogate_epochs):
-            surrogate_model.train()
-            loss_list = []
-            for images, labels in surrogate_loader:
-                images, labels = images.to(device), labels.to(device)
-                surrogate_opt.zero_grad()
-                outputs = surrogate_model(images)
-                loss = criterion(outputs, labels)
-                loss.backward()
-                loss_list.append(float(loss.data))
-                surrogate_opt.step()
-            surrogate_scheduler.step()
-            ave_loss = np.average(np.array(loss_list))
-            print('Epoch:%d, Loss: %.03f' % (epoch, ave_loss))
-        # Save the surrogate model
-        save_path = datasets_root_dir + './hagrid_checkpoint_surrogate_pretrain_' + str(surrogate_epochs) + '.pth'
-        torch.save(surrogate_model.state_dict(), save_path)
-
-        # Prepare models and optimizers for poi_warm_up training
-        poi_warm_up_model = generating_model
-        poi_warm_up_model.load_state_dict(surrogate_model.state_dict())
-
-        poi_warm_up_opt = torch.optim.RAdam(params=poi_warm_up_model.parameters(), lr=generating_lr_warmup)
-
-        # Poi_warm_up stage
-        poi_warm_up_model.train()
-        for param in poi_warm_up_model.parameters():
-            param.requires_grad = True
-
-        # Training the surrogate model
-        for epoch in range(0, warmup_round):
-            poi_warm_up_model.train()
-            loss_list = []
-            for images, labels in poi_warm_up_loader:
-                images, labels = images.to(device), labels.to(device)
-                poi_warm_up_model.zero_grad()
-                poi_warm_up_opt.zero_grad()
-                outputs = poi_warm_up_model(images)
-                loss = criterion(outputs, labels)
-                loss.backward(retain_graph=True)
-                loss_list.append(float(loss.data))
-                poi_warm_up_opt.step()
-            ave_loss = np.average(np.array(loss_list))
-            print('Epoch:%d, Loss: %e' % (epoch, ave_loss))
+        # surrogate_opt = torch.optim.SGD(params=surrogate_model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+        # surrogate_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(surrogate_opt, T_max=surrogate_epochs)
+        #
+        # # Training the surrogate model
+        # print('Training the surrogate model')
+        # for epoch in range(0, surrogate_epochs):
+        #     surrogate_model.train()
+        #     loss_list = []
+        #     for images, labels in surrogate_loader:
+        #         images, labels = images.to(device), labels.to(device)
+        #         surrogate_opt.zero_grad()
+        #         outputs = surrogate_model(images)
+        #         loss = criterion(outputs, labels)
+        #         loss.backward()
+        #         loss_list.append(float(loss.data))
+        #         surrogate_opt.step()
+        #     surrogate_scheduler.step()
+        #     ave_loss = np.average(np.array(loss_list))
+        #     print('Epoch:%d, Loss: %.03f' % (epoch, ave_loss))
+        # # Save the surrogate model
+        # save_path = datasets_root_dir + './hagrid_checkpoint_surrogate_pretrain_' + str(surrogate_epochs) + '.pth'
+        # torch.save(surrogate_model.state_dict(), save_path)
+        #
+        # # Prepare models and optimizers for poi_warm_up training
+        # poi_warm_up_model = generating_model
+        # poi_warm_up_model.load_state_dict(surrogate_model.state_dict())
+        #
+        # poi_warm_up_opt = torch.optim.RAdam(params=poi_warm_up_model.parameters(), lr=generating_lr_warmup)
+        #
+        # # Poi_warm_up stage
+        # poi_warm_up_model.train()
+        # for param in poi_warm_up_model.parameters():
+        #     param.requires_grad = True
+        #
+        # # Training the surrogate model
+        # for epoch in range(0, warmup_round):
+        #     poi_warm_up_model.train()
+        #     loss_list = []
+        #     for images, labels in poi_warm_up_loader:
+        #         images, labels = images.to(device), labels.to(device)
+        #         poi_warm_up_model.zero_grad()
+        #         poi_warm_up_opt.zero_grad()
+        #         outputs = poi_warm_up_model(images)
+        #         loss = criterion(outputs, labels)
+        #         loss.backward(retain_graph=True)
+        #         loss_list.append(float(loss.data))
+        #         poi_warm_up_opt.step()
+        #     ave_loss = np.average(np.array(loss_list))
+        #     print('Epoch:%d, Loss: %e' % (epoch, ave_loss))
 
         # Trigger generating stage
-        for param in poi_warm_up_model.parameters():
+        for param in generating_model.parameters():
             param.requires_grad = False
 
         batch_pert = torch.autograd.Variable(noise.to(device), requires_grad=True)
@@ -809,8 +833,7 @@ def get_narcissus_hagrid_poisoned_data(
                 clamp_batch_pert = torch.clamp(batch_pert, -l_inf_r * 2, l_inf_r * 2)
                 new_images = torch.clamp(apply_noise_patch(clamp_batch_pert, new_images.clone(), mode=patch_mode), -1,
                                          1)
-                per_logits = poi_warm_up_model.forward(new_images)
-                # Targeted attack - via chatgpt, targeted narcissus attack to try and raise ASR
+                per_logits = generating_model.forward(new_images)
                 # loss = criterion(per_logits, labels)
                 target_labels = torch.full_like(labels, lab)
                 loss = criterion(per_logits, target_labels)
@@ -843,6 +866,27 @@ def get_narcissus_hagrid_poisoned_data(
         print('Loading Narcissus trigger')
         with open(trigger_dir, 'rb') as f:
             narcissus_trigger = pickle.load(f)
+
+    print("About the trigger ---------------")
+    print("Trigger min:", narcissus_trigger.min().item())
+    print("Trigger max:", narcissus_trigger.max().item())
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+
+    trigger = narcissus_trigger[0].detach().cpu().numpy()
+    trigger = np.transpose(trigger, (1, 2, 0))
+
+    # Undo normalization
+    trigger_img = trigger * std + mean
+
+    # Clip to valid range
+    trigger_img = np.clip(trigger_img, 0, 1)
+
+    plt.imshow(trigger_img)
+    plt.title("Trigger (ImageNet space)")
+    plt.axis('off')
+    plt.savefig("trigger.png")
+    plt.show()
 
     train_hf = hf.select(range(hagrid_trainsize))
     val_hf = hf.select(range(hagrid_trainsize, hagrid_totalsize))
