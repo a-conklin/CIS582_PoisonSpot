@@ -1,56 +1,59 @@
 
-# **PoisonSpot: Precise Spotting of Clean-Label Backdoors via Fine-Grained Training Provenance Tracking**
+# **Applying Poisonspot to the HaGRID Dataset**
 <p align="center">
-<img width="210" height="170" alt="PoisonSpot-Logo" src="https://github.com/user-attachments/assets/9f69cf04-2390-4575-9220-97e9a2a97688" />
 </p>
 
-This repository contains the implementation of our ACM CCS 2025 paper **[PoisonSpot: Precise Spotting of Clean-Label Backdoors via Fine-Grained Training Provenance Tracking](https://github.com/um-dsp/PoisonSpot/blob/main/PoisonSpot-CCS2025.pdf)**. PoisonSpot is a novel system that precisely detects clean-label backdoor attacks by using fine-grained training provenance tracking. Inspired by dynamic taint tracking, PoisonSpot uses fine-grained training provenance tracker that: (1) tags & traces the impact of every single training sample on model updates, (2) probabilistically scores suspect samples based on their lineage of impact on model weights, and (3) separates the clean from the poisonous before retraining a model. 
+This repository contains modifications to the original PoisonSpot code https://github.com/um-dsp/PoisonSpot in order to facilitate experiments using the HaGRID Dataset
 
-<img width="1007" height="363" alt="PoisonSpot-Overview" src="https://github.com/user-attachments/assets/38607bac-03b2-4b8f-aa68-dc146be3f996" />
-
-
----
-
-
-## Steps of PoisonSpot
-1. **Poisoned Model Training (`poisoned_training`)**
-   - Train a model on a dataset with a specified percentage of poisoned samples. 
-2. **Batch Level Provenance Capture (`batch_level`)**
-   - Capture the batch-level provenance data using the trained model to get important features.
-3. **Sample Level Provenance Capture (`sample_level`)**
-   - Capture the sample-level provenance data using the trained model and the important features. 
-4. **Poisoning Score Attribution (`score_samples`)**
-   - Score the suspected samples using the captured sample-level provenance data.
-5. **Retraining (`retrain`)**
-   - Retrain and evaluate the model by removing the predicted poisoned samples from the training set.
 
 
 ## Overview of the folder structure
 ```
 PoisonSpot/
-├── configs/                   # configurations for different attacks, datasets, and other hyper-parameters. 
+├── configs/                   # *Updated* Added a new configuration that runs a narcissus attack using the HaGRID dataset with poison rate 10% and suspected poison rate 50%
 ├── src/                       # Source code
 │   ├── attacks/               # Attack implementations
 │   │   ├── HiddenTriggerBackdoor/
 │   │   ├── Labelconsistent/
 │   │   ├── mixed/
-│   │   ├── Narcissus/
+│   │   ├── Narcissus/         # *Updated* Added a new function to perform a narcissus attack on the HaGRID Dataset
 │   │   └── Sleeperagent/
-│   ├── data/                  # Stores downloaded poisoned-datasets.
+│   ├── data/                  # *Updated* Updated folder structure to store transformed HaGRID data while running experiments to speed up successive attempts.
 │   ├── helpers/               
 │   │   ├── data.py            # Data loading function
-│   │   ├── provenance.py      # Functions for capturing batch-level and sample-level provenance data 
+│   │   ├── provenance.py      # *Updated* Commented out a single line that was forcing images to 32x32 and breaking stacks with the larger HaGRID images
 │   │   ├── scoring.py         # Score samples for poisoning 
 │   │   └── train.py           # model training funciton 
 │   ├── models/                # Model definitions (e.g., ResNet)
-│   ├── results/               # Stores results for each experiment, generated figures and config logs 
+│   ├── results/               # *Updated* Added results from last HaGRID run
 │   ├── saved_models/          # Model checkpoints for clean training, poisoned training, and retraining. 
 │   ├── temp_folder/           # Temporary folder to save model during provenance capture
 │   └── Training_Prov_Data/    # Stores captured provenance data (batch-level & sample-level) 
-├── main.py                    # Main entry point code for all the steps 
-├── README.md                  # Instructions for running the PoisonSpot experiments
-└── requirements.txt           # Python dependencies
+├── main.py                    # *Updated* Added additional branches to the code to support the new HaGRID experiment path
+├── README.md                  # *Updated* Modified this to discuss whats new, as you can tell since you're reading this!
+└── requirements.txt           # *Updated* Removed some libraries that weren't being used and made some minor updates to be compatible with Colab
 ```
+
+## New Configuration Files
+This section is small since there's only one- a narcissus attack utilizing the HaGRID dataset. Feel free to modify its parameters to run other experiments.
+
+### Narcissus on HaGRID
+
+| Filename                                   | Dataset   | Scenario       | pr_tgt (%) | pr_sus (%) | 
+|--------------------------------------------|-----------|----------------|-----------:|-----------:|
+| `configs/config_narcissus_hagrid_10_10_50.yaml`| CIFAR-10  | fine_tuning   |         10 |         50 |
+
+## Hardware and Software Setup
+
+### Hardware (tested on)
+ 
+- **GPU:** Google Colab A100  
+
+### Software (tested on)
+
+- **Python:** 3.12
+- **CUDA version:** 12.5  
+
 
 
 ## Arguments
@@ -105,19 +108,8 @@ PoisonSpot/
 
 ---
 
-## Hardware and Software Setup
 
-### Hardware (tested on)
-
-- **CPU:** AMD Ryzen Threadripper 7960X (24 cores / 48 threads, 545 – 5362 MHz)  
-- **RAM:** 251 GiB total 
-- **GPU:** NVIDIA GeForce RTX 4090 (24 564 MiB)  
-
-### Software (tested on)
-
-- **Python:** 3.10.12  
-- **CUDA version:** 12.4  
-
+## Remainder is identical to the Original README
 
 
 
@@ -180,84 +172,6 @@ PoisonSpot/
    ```
 
 ---
-
-## Configuration Files
-This repository includes several custom configuration files for different attacks and datasets. Each configuration file is designed to run a specific attack on a dataset with predefined parameters. These configuration files are located in the `configs/` directory. You can modify these files to adjust parameters such as the percentage of poisoned samples, batch size, learning rate, and more. The configuration files are written in YAML format. You can easily edit them to customize your experiments. 
-
-Below are the custom configuration files included in this repository, with a brief description of each.
-
-### Hidden-Trigger (ht)
-| Filename                               | Dataset   | Scenario      | pr_tgt (%) | pr_sus (%) | Result location in the paper |
-|----------------------------------------|-----------|---------------|-----------:|-----------:|-----------------------------|
-| `configs/config_ht_cifar_10.yaml`           | CIFAR-10  | fine_tune  |         50 |         50 | Table 6  |
-| `configs/config_ht_slt_10.yaml`             | STL-10    | fine_tune  |         50 |         50 | Table 17 |
-| `configs/config_ht_imagenet_fine_tune.yaml` | ImageNet  | fine_tune  |         50 |         50 | Table 17 |
-
-
-###  Sleeper-Agent on CIFAR-10
-
-| Filename                                   | Dataset   | Scenario       | pr_tgt (%) | pr_sus (%) | Result location in the paper   |
-|--------------------------------------------|-----------|----------------|-----------:|-----------:|--------------------------------|
-| `configs/config_sa_cifar_10.yaml`          | CIFAR-10  | from_scratch   |         10 |         10 |      Table 8                   |
-| `configs/config_sa_cifar_10_10_25.yaml`    | CIFAR-10  | from_scratch   |         10 |         25 |      Table 8                     |
-| `configs/config_sa_cifar_10_10_50.yaml`    | CIFAR-10  | from_scratch   |         10 |         50 |      Table 7/8                           |
-| `configs/config_sa_cifar_10_10_75.yaml`    | CIFAR-10  | from_scratch   |         10 |         75 |      Table 8                             |
-| `configs/config_sa_cifar_10_10_100.yaml`   | CIFAR-10  | from_scratch   |         10 |        100 |      Table 8                           |
-| `configs/config_sa_cifar_10_20_50.yaml`    | CIFAR-10  | from_scratch   |         20 |         50 |      Table 7                          |
-| `configs/config_sa_cifar_10_30_50.yaml`    | CIFAR-10  | from_scratch   |         30 |         50 |      Table 7                            |
-| `configs/config_sa_cifar_10_fine_tune.yaml`| CIFAR-10  | fine_tune      |         50 |         50 |      Table 6                          |
-| `configs/config_sa_slt_10.yaml`            | CIFAR-10  | fine_tune      |          50 |          50 |      Table 17                       |
-
----
-
-### Label-Consistent on CIFAR-10
-
-| Filename                                   | Dataset   | Scenario       | pr_tgt (%) | pr_sus (%) | Result location in the paper  |
-|--------------------------------------------|-----------|----------------|-----------:|-----------:|------------------------|
-| `configs/config_lc_cifar_10.yaml`          | CIFAR-10  | from_scratch   |         10 |         10 | Table 8    |
-| `configs/config_lc_cifar_10_10_25.yaml`    | CIFAR-10  | from_scratch   |         10 |         25 | Table 8                        |
-| `configs/config_lc_cifar_10_10_50.yaml`    | CIFAR-10  | from_scratch   |         10 |         50 | Table 7/8                        |
-| `configs/config_lc_cifar_10_10_75.yaml`    | CIFAR-10  | from_scratch   |         10 |         75 | Table 8                        |
-| `configs/config_lc_cifar_10_10_100.yaml`   | CIFAR-10  | from_scratch   |         10 |        100 | Table 8                        |
-| `configs/config_lc_cifar_10_20_50.yaml`    | CIFAR-10  | from_scratch   |         20 |         50 | Table 7                       |
-| `configs/config_lc_cifar_10_30_50.yaml`    | CIFAR-10  | from_scratch   |         30 |         50 | Table 7                       |
-| `configs/config_lc_cifar_10_40_50.yaml`    | CIFAR-10  | from_scratch   |         40 |         50 | Table 12                      |
-| `configs/config_lc_cifar_10_50_50.yaml`    | CIFAR-10  | from_scratch   |         50 |         50 | Table 12                       |
-| `configs/config_lc_cifar_10_75_75.yaml`    | CIFAR-10  | from_scratch   |         75 |         75 | Table 13                       |
-| `configs/config_lc_cifar_10_100_100.yaml`  | CIFAR-10  | from_scratch   |        100 |         100| Table 13                       |
-| `configs/config_lc_cifar_10_eps_2.yaml`    | CIFAR-10  | from_scratch   |         10 |         50 | Table 9  |
-| `configs/config_lc_cifar_10_eps_4.yaml`    | CIFAR-10  | from_scratch   |         10 |         50 | Table 9  |
-
----
-
-### Narcissus on CIFAR-10
-
-| Filename                                   | Dataset   | Scenario       | pr_tgt (%) | pr_sus (%) | Result location in the paper                   |
-|--------------------------------------------|-----------|----------------|-----------:|-----------:|------------------------|
-| `configs/config_narcissus_cifar_10.yaml`       | CIFAR-10  | from_scratch   |         10 |         10 | Table 8                        |
-| `configs/config_narcissus_cifar_10_10_25.yaml` | CIFAR-10  | from_scratch   |         10 |         25 | Table 8                        |
-| `configs/config_narcissus_cifar_10_10_50.yaml` | CIFAR-10  | from_scratch   |         10 |         50 | Table 7/8                      |
-| `configs/config_narcissus_cifar_10_10_75.yaml` | CIFAR-10  | from_scratch   |         10 |         75 | Table 8                        |
-| `configs/config_narcissus_cifar_10_10_100.yaml`| CIFAR-10  | from_scratch   |         10 |        100 | Table 8                        |
-| `configs/config_narcissus_cifar_10_20_50.yaml` | CIFAR-10  | from_scratch   |         20 |         50 | Table 7                        |
-| `configs/config_narcissus_cifar_10_30_50.yaml` | CIFAR-10  | from_scratch   |         30 |         50 | Table 7                        |
-| `configs/config_narcissus_cifar_10_40_50.yaml` | CIFAR-10  | from_scratch   |         40 |         50 | Table 12                       |
-| `configs/config_narcissus_cifar_10_50_50.yaml` | CIFAR-10  | from_scratch   |         50 |         50 | Table 12                       |
-| `configs/config_narcissus_cifar_10_75_75.yaml` | CIFAR-10  | from_scratch   |         75 |         75 | Table 13                       |
-| `configs/config_narcissus_cifar_10_100_100.yaml` | CIFAR-10 | from_scratch   |       100 |        100| Table 13                        |
-| `configs/config_narcissus_cifar_10_10_50_eps_6.yaml`| CIFAR-10  | from_scratch   |         10 |         50 | Table 9                   |
-| `configs/config_narcissus_cifar_10_10_50_eps_8.yaml`| CIFAR-10  | from_scratch   |         10 |         50 | Table 9                   |
-| `configs/config_narcissus_cifar_10_0.5_5.yaml`  | CIFAR-10  | from_scratch   |          0.5 |       50 | Table 8                         |
-
-### Mixed Attacks on CIFAR-10
-
-| Filename                                            | Dataset   | Scenario      | pr_tgt (%)                           | pr_sus (%)                           | Result location in the paper  |
-|-----------------------------------------------------|-----------|---------------|--------------------------------------|--------------------------------------|-----------------|
-| `configs/config_mixed_lc_narcissus_cifar_10.yaml`     | CIFAR-10  | from_scratch  | LC = 10; Narcissus = 0.5             | LC = 50; Narcissus = 50              | Table 10              |
-| `configs/config_mixed_lc_sa_narcissus_cifar_10.yaml`  | CIFAR-10  | from_scratch  | LC = 10; SA = 10; Narcissus = 0.5    | LC = 50; SA = 50; Narcissus = 50     | Table 11              |
-
-
-
 
 ## Note
 - The `pr_tgt` argument specifies the percentage of poisoned samples in the target set. So, to be consistent with our paper, in which we use the percentage of poisoned samples in the whole dataset, you can divide pr_tgt by the number of classes (10). For example, if you set `pr_tgt=10`, it means you are running an experiment with a 1% poisoned sample percentage in the training set.
