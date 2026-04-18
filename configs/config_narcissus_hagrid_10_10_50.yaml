@@ -6,7 +6,7 @@ attack: narcissus
 # dataset / model choices
 dataset: hagrid
 model: ResNet18
-scenario: fine_tuning
+scenario: fine_tuning  #We use a pretrained ResNet18 and finetune because training one from scratch with hagrid data would require enormous time and resources
 
 # data paths
 dataset_dir: src/data/
